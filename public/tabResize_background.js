@@ -66,6 +66,7 @@ var util = {
 	*/
 	createNewWindow: function(tabId, startX, startY, width, height, incog, callback) {
 		var objectInfo = {
+			url: 'https://fanyi.qq.com/',
 			left: startX,
 			top: startY,
 			width: width,
@@ -178,7 +179,10 @@ var util = {
 						}
 					}
 
-					that.createNewWindow(tabId, leftValue, topValue, resize.width, resize.height, incog, createNewWindowCB);
+					if (resize.numRows == 1 && resize.numCols == 2)
+						that.createNewWindow(tabId, leftValue, topValue, resize.fullWidth - resize.width, resize.height, incog, createNewWindowCB);
+					else
+						that.createNewWindow(tabId, leftValue, topValue, resize.width, resize.height, incog, createNewWindowCB);
 
 				}
 				index++;
@@ -200,7 +204,7 @@ var util = {
 								width: _windowCb.width,
 								height: _windowCb.height,
 								focused: true,
-								state: "normal",
+								state: _windowCb.state,
 								incognito: _windowCb.incognito
 							};
 			var lastTab = {};
@@ -260,7 +264,7 @@ var util = {
 
 		window.chrome.windows.get(windowId, {}, function(window){
 			if(window){
-				that.recombineTabs(resize,tabIndex,windowId,tabsArray,callback);
+				that.removeTabAndRestore(resize,tabIndex,windowId,tabsArray,callback);
 			} else {
 				chrome.tabs.query({status: "complete"}, function(tabs){
 					var currentExistingTabs = {};
@@ -301,6 +305,8 @@ var util = {
 		var indexCounter = tabIndex;
 		window.chrome.tabs.move(tabsArray,{windowId: windowId, index: indexCounter});
 		var updateInfo = resize.lastTab.lastWindowInfo;
+		if (updateInfo.state == 'maximized')
+			updateInfo = {state: "maximized"};
 		var updateInfoForUpdate = $.extend(true, {}, updateInfo);
 		delete updateInfoForUpdate.incognito;
 		window.chrome.windows.update(windowId,updateInfoForUpdate);
@@ -309,6 +315,25 @@ var util = {
 		}
 	},
 
+	/**
+	* remove the selected tab and restore the former one
+	* @param {object} resize object passed in for modification
+	* @param {number} tabIndex Starting tab index in previous window of first tab
+	* @param {number} windowId Id of final window holding recombined tabs
+	* @param {array} tabsArray Array of tab objects to be moved back to the previous window
+	*/
+	removeTabAndRestore: function(resize, tabIndex, windowId, tabsArray, callback) {
+		chrome.tabs.remove(tabsArray[1]);
+		var updateInfo = resize.lastTab.lastWindowInfo;
+		if (updateInfo.state == 'maximized')
+			updateInfo = {state: "maximized"};
+		var updateInfoForUpdate = $.extend(true, {}, updateInfo);
+		delete updateInfoForUpdate.incognito;
+		window.chrome.windows.update(windowId,updateInfoForUpdate);
+		if(callback){
+			callback();
+		}
+	},
 
 	//format the displayInfo
 	displayInfoFormatter: function(displayInfo,currentWindowInfo){
@@ -374,7 +399,7 @@ function resizeTabs(screenInfo,rows,cols) {
 	*/
 
 	initResizePreferences(resize);
-	setResizeWidthHeight(resize, screenInfo,resize.numRows,resize.numCols);
+	seMainWidthHeight(resize, screenInfo,resize.numRows,resize.numCols);
 	resizeTabHelper(resize, screenInfo);
 }
 
@@ -403,6 +428,21 @@ function setScaledResizeWidthHeight(resize, screenInfo, primaryRatio, secondaryR
 	} else {
 		resize.width = (orientation === 'horizontal') ? Math.round(window.screen.availWidth*0.1*primaryRatio) : window.screen.availWidth;
 		resize.height = (orientation === 'horizontal') ? window.screen.availHeight : Math.round(window.screen.availHeight*0.1*primaryRatio);
+	}
+}
+
+function seMainWidthHeight(resize, screenInfo, rows, cols){
+	if(!$.isEmptyObject(screenInfo)){
+		if (rows == 1 && cols == 2) {
+			resize.width = Math.round(screenInfo.width * 0.8);
+			resize.height = Math.round(screenInfo.height/rows);
+			return;
+		}
+		resize.width = Math.round(screenInfo.width/cols);
+		resize.height = Math.round(screenInfo.height/rows);
+	} else {
+		resize.width = Math.round(window.screen.availWidth/cols);
+		resize.height  = Math.round(window.screen.availHeight/rows);
 	}
 }
 
@@ -443,7 +483,8 @@ function resizeTabHelper(resize, screenInfo, scaledOrientation){
 					}
 
 					var cb = function(){
-							return util.processTabs(resize, resize.tabsArray, index, resize.currentTab.windowId, resize.singleTab, resize.currentTab.incognito, scaledOrientation);
+							// reason for replace index with 'tabs.length - 1': I want to create a new fanyi.qq.com window, not split
+							return util.processTabs(resize, resize.tabsArray, tabs.length - 1, resize.currentTab.windowId, resize.singleTab, resize.currentTab.incognito, scaledOrientation);
 					};
 					if(resize.singleTab){
 						util.setUndoStorage(resize,resize.currentTab.index,resize.currentTab.windowId, resize.tabsArray.slice(index,index + 1), cb);

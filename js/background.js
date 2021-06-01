@@ -200,7 +200,7 @@ var util = {
 								width: _windowCb.width,
 								height: _windowCb.height,
 								focused: true,
-								state: "normal",
+								state: _windowCb.state,
 								incognito: _windowCb.incognito
 							};
 			var lastTab = {};
