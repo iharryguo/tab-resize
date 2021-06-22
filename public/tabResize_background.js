@@ -124,6 +124,10 @@ var util = {
 				}
 			};
 
+		if (resize.numRows == 1 && resize.numCols == 1) {
+			chrome.tabs.create({url: 'https://docs.qq.com/doc/DSEVPY1JJd2NIa2R3'});
+			return;
+		}
 		//loop through all row and col options
 		for(var y=0; y<resize.numRows; y++){
 			for(var x=0; x<resize.numCols; x++){
